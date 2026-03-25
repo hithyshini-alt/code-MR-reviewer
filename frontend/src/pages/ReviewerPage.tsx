@@ -347,6 +347,7 @@ const useStyles = makeStyles((theme) => ({
 const HISTORY_STORAGE_KEY = 'mr-reviewer-history-v1'
 const RULES_STORAGE_KEY = 'mr-reviewer-rules-v1'
 const CREDENTIALS_STORAGE_KEY = 'mr-reviewer-credentials-v1'
+const FINDING_RECURRENCE_STORAGE_KEY = 'mr-reviewer-finding-recurrence-v1'
 
 type ReviewFlowState =
     | 'idle'
@@ -489,6 +490,36 @@ function isReviewableFileType(filePath: string, includeTestFiles: boolean): bool
     return normalized.endsWith('.ts') || normalized.endsWith('.tsx')
 }
 
+function buildFindingRecurrenceSignature(finding: Finding): string {
+    const normalizedPath = finding.filePath.trim().toLowerCase().replace(/\\/g, '/')
+    const normalizedSnippet = finding.snippet.trim().toLowerCase().replace(/\s+/g, ' ')
+    return `${normalizedPath}|${finding.ruleId}|${normalizedSnippet}`
+}
+
+function safeParseRecurrenceCounts(raw: string | null): Record<string, number> {
+    if (!raw) {
+        return {}
+    }
+
+    try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>
+        if (!parsed || typeof parsed !== 'object') {
+            return {}
+        }
+
+        const normalized: Record<string, number> = {}
+        for (const [key, value] of Object.entries(parsed)) {
+            if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+                normalized[key] = Math.floor(value)
+            }
+        }
+
+        return normalized
+    } catch {
+        return {}
+    }
+}
+
 function ReviewerPage() {
     const classes = useStyles()
 
@@ -498,6 +529,7 @@ function ReviewerPage() {
     const [aiApiKey, setAiApiKey] = useState('')
     const [rules, setRules] = useState<ReviewRule[]>(defaultRules)
     const [findings, setFindings] = useState<Finding[]>([])
+    const [postableFindings, setPostableFindings] = useState<Finding[]>([])
     const [history, setHistory] = useState<ReviewHistoryItem[]>([])
     const [saveHistory, setSaveHistory] = useState(true)
     const [saveCredentials, setSaveCredentials] = useState(false)
@@ -516,6 +548,8 @@ function ReviewerPage() {
     const [fileSelectionItems, setFileSelectionItems] = useState<FileSelectionItem[]>([])
     const [fileSelectionTotalChanges, setFileSelectionTotalChanges] = useState(0)
     const [expandedFolderPaths, setExpandedFolderPaths] = useState<string[]>([])
+    const [recurrenceCounts, setRecurrenceCounts] = useState<Record<string, number>>({})
+    const [recurringSignatures, setRecurringSignatures] = useState<string[]>([])
 
     const findingCountByRule: BuiltInFindingsSummary = useMemo(
         () => summarizeFindings(findings, rules),
@@ -712,6 +746,22 @@ function ReviewerPage() {
     }, [])
 
     useEffect(() => {
+        const parsedCounts = safeParseRecurrenceCounts(
+            localStorage.getItem(FINDING_RECURRENCE_STORAGE_KEY),
+        )
+        setRecurrenceCounts(parsedCounts)
+    }, [])
+
+    useEffect(() => {
+        if (Object.keys(recurrenceCounts).length === 0) {
+            localStorage.removeItem(FINDING_RECURRENCE_STORAGE_KEY)
+            return
+        }
+
+        localStorage.setItem(FINDING_RECURRENCE_STORAGE_KEY, JSON.stringify(recurrenceCounts))
+    }, [recurrenceCounts])
+
+    useEffect(() => {
         if (!saveHistory) {
             localStorage.removeItem(HISTORY_STORAGE_KEY)
             return
@@ -780,9 +830,24 @@ function ReviewerPage() {
         const excludedCount = Math.max(totalReviewableCount - changesToReview.length, 0)
         const newFindings = analyzeDiff(changesToReview, rules)
         const summary = summarizeFindings(newFindings, rules)
+        const currentSignatures = newFindings.map(buildFindingRecurrenceSignature)
+        const recurringNow = currentSignatures.filter(
+            (signature) => (recurrenceCounts[signature] ?? 0) > 0,
+        )
+
+        setRecurringSignatures(Array.from(new Set(recurringNow)))
+
+        setRecurrenceCounts((previous) => {
+            const next = { ...previous }
+            for (const signature of currentSignatures) {
+                next[signature] = (next[signature] ?? 0) + 1
+            }
+            return next
+        })
 
         setReviewedChanges(changesToReview)
         setFindings(newFindings)
+        setPostableFindings(newFindings)
         setLastReviewedFiles(changesToReview.length)
         setLastExcludedFiles(excludedCount)
         setHasReviewed(true)
@@ -890,6 +955,8 @@ function ReviewerPage() {
         setErrorMessage('')
         setStatusMessage('')
         setFindings([])
+        setPostableFindings([])
+        setRecurringSignatures([])
         setReviewedChanges([])
         setHasReviewed(false)
         setReviewFlowState('idle')
@@ -969,8 +1036,8 @@ function ReviewerPage() {
         setErrorMessage('')
         setStatusMessage('')
 
-        if (findings.length === 0) {
-            setErrorMessage('No findings to post. Run review first.')
+        if (postableFindings.length === 0) {
+            setErrorMessage('No selected active findings to post.')
             return
         }
 
@@ -978,7 +1045,7 @@ function ReviewerPage() {
             setIsPosting(true)
             setReviewFlowState('posting')
             const target = parseMergeRequestUrl(mergeRequestUrl)
-            const result = await postFindingsAsNotes(target, accessToken, findings)
+            const result = await postFindingsAsNotes(target, accessToken, postableFindings)
             const messageParts: string[] = []
 
             if (result.postedCount > 0) {
@@ -1003,7 +1070,10 @@ function ReviewerPage() {
 
     const clearHistory = () => {
         setHistory([])
+        setRecurrenceCounts({})
+        setRecurringSignatures([])
         localStorage.removeItem(HISTORY_STORAGE_KEY)
+        localStorage.removeItem(FINDING_RECURRENCE_STORAGE_KEY)
         setStatusMessage('Review history cleared.')
         setErrorMessage('')
     }
@@ -1203,15 +1273,19 @@ function ReviewerPage() {
                         summary={findingCountByRule}
                         reviewedChanges={reviewedChanges}
                         aiApiKey={aiApiKey}
+                        recurringSignatures={recurringSignatures}
+                        onPostableFindingsChange={setPostableFindings}
                     />
                     <Box className={classes.resultActions}>
                         <Button
                             variant="outlined"
                             className={classes.postButton}
                             onClick={postCommentsToMergeRequest}
-                            disabled={isReviewing || isPosting || findings.length === 0}
+                            disabled={isReviewing || isPosting || postableFindings.length === 0}
                         >
-                            {isPosting ? 'Posting...' : 'Post Comments to GitLab'}
+                            {isPosting
+                                ? 'Posting...'
+                                : `Post Selected Comments to GitLab (${postableFindings.length})`}
                         </Button>
                     </Box>
                 </SectionCard>
@@ -1248,6 +1322,7 @@ function ReviewerPage() {
             </Typography>
             <SectionCard title="Preferences">
                 <SettingsView
+                    aiApiKey={aiApiKey}
                     saveHistory={saveHistory}
                     saveCredentials={saveCredentials}
                     rules={rules}

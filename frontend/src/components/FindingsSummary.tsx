@@ -1,5 +1,7 @@
-import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material'
-import { useMemo, useState } from 'react'
+import { Alert, Box, Button, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { useEffect, useMemo, useState } from 'react'
+import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded'
+import RemoveCircleOutlineRoundedIcon from '@mui/icons-material/RemoveCircleOutlineRounded'
 import { makeStyles } from '../hooks/makeStyles'
 import type { BuiltInFindingsSummary, Finding, GitLabChange } from '../types/reviewer'
 import { requestAiFix, type AiFixResult } from '../services/aiFix'
@@ -9,6 +11,8 @@ type FindingsSummaryProps = {
     summary: BuiltInFindingsSummary
     reviewedChanges: GitLabChange[]
     aiApiKey: string
+    recurringSignatures: string[]
+    onPostableFindingsChange: (findings: Finding[]) => void
 }
 
 type ParsedDiffLine = {
@@ -25,6 +29,9 @@ type DiffPreviewLine = {
     newLine: number | null
     highlight?: boolean
 }
+
+type FindingLifecycleStatus = 'active' | 'dismissed'
+type SeverityFilter = 'all' | 'error' | 'warning' | 'info'
 
 const useStyles = makeStyles((theme) => ({
     chips: {
@@ -44,6 +51,59 @@ const useStyles = makeStyles((theme) => ({
     finding: {
         borderRadius: theme.spacing(1.5),
         border: `1px solid ${theme.palette.warning.light}`,
+        '& .MuiAlert-message': {
+            width: '100%',
+        },
+    },
+    controlsWrap: {
+        padding: theme.spacing(1.25),
+        borderRadius: theme.spacing(1.25),
+        border: `1px solid ${theme.palette.divider}`,
+        backgroundColor: theme.palette.background.default,
+    },
+    controlsGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(1, minmax(0, 1fr))',
+        gap: theme.spacing(1),
+    },
+    bulkRow: {
+        marginTop: theme.spacing(1),
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: theme.spacing(1),
+    },
+    smallButton: {
+        minWidth: 0,
+    },
+    findingHeaderRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: theme.spacing(1),
+        flexWrap: 'wrap',
+        width: '100%',
+    },
+    findingSelectWrap: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: theme.spacing(0.5),
+        marginLeft: 'auto',
+        flexShrink: 0,
+    },
+    selectToggleButton: {
+        borderRadius: theme.spacing(3),
+        textTransform: 'none',
+        fontWeight: 700,
+        paddingInline: theme.spacing(1.25),
+        minWidth: 0,
+    },
+    findingMetaRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: theme.spacing(0.75),
+        flexWrap: 'wrap',
+        marginTop: theme.spacing(0.25),
     },
     codeLabel: {
         marginTop: theme.spacing(1),
@@ -215,9 +275,7 @@ function buildDiffPreviewForFinding(
 
     const targetByLine =
         finding.lineNumber !== null
-            ? parsed.findIndex(
-                (line) => line.kind === 'add' && line.newLine === finding.lineNumber,
-            )
+            ? parsed.findIndex((line) => line.kind === 'add' && line.newLine === finding.lineNumber)
             : -1
 
     const normalizedSnippet = finding.snippet.trim()
@@ -225,8 +283,7 @@ function buildDiffPreviewForFinding(
         targetByLine >= 0
             ? targetByLine
             : parsed.findIndex(
-                (line) =>
-                    line.kind === 'add' && normalizedSnippet.length > 0 && line.text.trim() === normalizedSnippet,
+                (line) => line.kind === 'add' && normalizedSnippet.length > 0 && line.text.trim() === normalizedSnippet,
             )
 
     const targetIndex = targetBySnippet >= 0 ? targetBySnippet : -1
@@ -243,16 +300,8 @@ function buildDiffPreviewForFinding(
         ]
     }
 
-    let start = Math.max(0, targetIndex - 3)
-    let end = Math.min(parsed.length - 1, targetIndex + 3)
-
-    while (start > 0 && parsed[start].kind !== 'meta' && parsed[start - 1].kind === 'meta') {
-        start -= 1
-    }
-
-    while (end < parsed.length - 1 && parsed[end].kind !== 'meta' && parsed[end + 1].kind === 'meta') {
-        end += 1
-    }
+    const start = Math.max(0, targetIndex - 3)
+    const end = Math.min(parsed.length - 1, targetIndex + 3)
 
     return parsed.slice(start, end + 1).map((line, index) => ({
         kind: line.kind,
@@ -266,9 +315,7 @@ function buildDiffPreviewForFinding(
 function findTargetAddLineIndex(finding: Finding, parsed: ParsedDiffLine[]): number {
     const targetByLine =
         finding.lineNumber !== null
-            ? parsed.findIndex(
-                (line) => line.kind === 'add' && line.newLine === finding.lineNumber,
-            )
+            ? parsed.findIndex((line) => line.kind === 'add' && line.newLine === finding.lineNumber)
             : -1
 
     const normalizedSnippet = finding.snippet.trim()
@@ -276,8 +323,7 @@ function findTargetAddLineIndex(finding: Finding, parsed: ParsedDiffLine[]): num
         targetByLine >= 0
             ? targetByLine
             : parsed.findIndex(
-                (line) =>
-                    line.kind === 'add' && normalizedSnippet.length > 0 && line.text.trim() === normalizedSnippet,
+                (line) => line.kind === 'add' && normalizedSnippet.length > 0 && line.text.trim() === normalizedSnippet,
             )
 
     return targetBySnippet
@@ -305,18 +351,124 @@ function buildContextWindowLines(finding: Finding, change: GitLabChange | undefi
     })
 }
 
-function FindingsSummary({ findings, summary, reviewedChanges, aiApiKey }: FindingsSummaryProps) {
+function buildFindingRecurrenceSignature(finding: Finding): string {
+    const normalizedPath = finding.filePath.trim().toLowerCase().replace(/\\/g, '/')
+    const normalizedSnippet = finding.snippet.trim().toLowerCase().replace(/\s+/g, ' ')
+    return `${normalizedPath}|${finding.ruleId}|${normalizedSnippet}`
+}
+
+function FindingsSummary({
+    findings,
+    summary,
+    reviewedChanges,
+    aiApiKey,
+    recurringSignatures,
+    onPostableFindingsChange,
+}: FindingsSummaryProps) {
     const classes = useStyles()
     const [loadingKey, setLoadingKey] = useState<string | null>(null)
     const [errorByKey, setErrorByKey] = useState<Record<string, string>>({})
     const [aiByKey, setAiByKey] = useState<Record<string, AiFixResult>>({})
+    const [selectedByKey, setSelectedByKey] = useState<Record<string, boolean>>({})
+    const [statusByKey, setStatusByKey] = useState<Record<string, FindingLifecycleStatus>>({})
+    const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all')
 
     const diffByPath = useMemo(
         () => new Map(reviewedChanges.map((change) => [change.new_path || change.old_path, change])),
         [reviewedChanges],
     )
 
-    const getFindingKey = (finding: Finding, index: number) => `${finding.ruleId}|${finding.filePath}|${finding.lineNumber ?? 'na'}|${index}`
+    const getFindingKey = (finding: Finding, index: number) =>
+        `${finding.ruleId}|${finding.filePath}|${finding.lineNumber ?? 'na'}|${index}`
+
+    const findingEntries = useMemo(
+        () => findings.map((finding, index) => ({ finding, index, key: getFindingKey(finding, index) })),
+        [findings],
+    )
+    const recurringSignatureSet = useMemo(
+        () => new Set(recurringSignatures),
+        [recurringSignatures],
+    )
+
+    useEffect(() => {
+        setSelectedByKey((previous) => {
+            const next: Record<string, boolean> = {}
+            for (const entry of findingEntries) {
+                next[entry.key] = previous[entry.key] ?? true
+            }
+            return next
+        })
+
+        setStatusByKey((previous) => {
+            const next: Record<string, FindingLifecycleStatus> = {}
+            for (const entry of findingEntries) {
+                next[entry.key] = previous[entry.key] ?? 'active'
+            }
+            return next
+        })
+    }, [findingEntries])
+
+    const filteredSortedEntries = useMemo(() => {
+        const filtered = findingEntries.filter((entry) => {
+            const status = statusByKey[entry.key] ?? 'active'
+
+            if (severityFilter !== 'all' && entry.finding.severity !== severityFilter) return false
+            if (status !== 'active') return false
+
+            return true
+        })
+
+        return filtered
+    }, [findingEntries, severityFilter, statusByKey])
+
+    const postableFindings = useMemo(
+        () =>
+            findingEntries
+                .filter((entry) => (statusByKey[entry.key] ?? 'active') === 'active' && (selectedByKey[entry.key] ?? true))
+                .map((entry) => entry.finding),
+        [findingEntries, selectedByKey, statusByKey],
+    )
+
+    useEffect(() => {
+        onPostableFindingsChange(postableFindings)
+    }, [onPostableFindingsChange, postableFindings])
+
+    const selectedVisibleCount = useMemo(
+        () => filteredSortedEntries.filter((entry) => selectedByKey[entry.key] ?? true).length,
+        [filteredSortedEntries, selectedByKey],
+    )
+
+    const applyDismissToSelected = () => {
+        const selectedKeys = filteredSortedEntries
+            .filter((entry) => selectedByKey[entry.key] ?? true)
+            .map((entry) => entry.key)
+
+        if (selectedKeys.length === 0) {
+            return
+        }
+
+        setStatusByKey((previous) => {
+            const next = { ...previous }
+            for (const key of selectedKeys) {
+                next[key] = 'dismissed'
+            }
+            return next
+        })
+    }
+
+    const toggleSelectAllVisible = () => {
+        const allVisibleSelected =
+            filteredSortedEntries.length > 0 &&
+            filteredSortedEntries.every((entry) => selectedByKey[entry.key] ?? true)
+
+        setSelectedByKey((previous) => {
+            const next = { ...previous }
+            for (const entry of filteredSortedEntries) {
+                next[entry.key] = !allVisibleSelected
+            }
+            return next
+        })
+    }
 
     const handleGetAiFix = async (finding: Finding, index: number) => {
         const key = getFindingKey(finding, index)
@@ -348,6 +500,7 @@ function FindingsSummary({ findings, summary, reviewedChanges, aiApiKey }: Findi
                 <Chip className={classes.chip} label={`No deprecated tags: ${summary.noDeprecatedTags}`} />
                 <Chip className={classes.chip} label={`Optional chaining: ${summary.optionalChaining}`} />
                 <Chip className={classes.chip} label={`Custom: ${summary.custom}`} />
+                <Chip className={classes.chip} label={`Postable selected: ${postableFindings.length}`} />
             </Stack>
 
             {findings.length === 0 ? (
@@ -356,25 +509,95 @@ function FindingsSummary({ findings, summary, reviewedChanges, aiApiKey }: Findi
                 </Typography>
             ) : (
                 <Stack className={classes.list}>
-                    {findings.map((finding, index) => {
+                    <Box className={classes.controlsWrap}>
+                        <Box className={classes.controlsGrid}>
+                            <TextField
+                                select
+                                size="small"
+                                label="Severity"
+                                value={severityFilter}
+                                onChange={(event) => setSeverityFilter(event.target.value as SeverityFilter)}
+                            >
+                                <MenuItem value="all">All severities</MenuItem>
+                                <MenuItem value="error">Error</MenuItem>
+                                <MenuItem value="warning">Warning</MenuItem>
+                                <MenuItem value="info">Info</MenuItem>
+                            </TextField>
+                        </Box>
+
+                        <Box className={classes.bulkRow}>
+                            <Button size="small" variant="outlined" onClick={toggleSelectAllVisible} className={classes.smallButton}>
+                                {filteredSortedEntries.length > 0 && selectedVisibleCount === filteredSortedEntries.length
+                                    ? 'Unselect all'
+                                    : 'Select all'}
+                            </Button>
+                            <Button size="small" variant="outlined" color="inherit" onClick={applyDismissToSelected} className={classes.smallButton}>
+                                Dismiss selected
+                            </Button>
+                        </Box>
+                    </Box>
+
+                    {filteredSortedEntries.map((entry) => {
+                        const { finding, index, key } = entry
                         const change = diffByPath.get(finding.filePath)
                         const previewLines = buildDiffPreviewForFinding(finding, change)
-                        const findingKey = getFindingKey(finding, index)
-                        const aiResult = aiByKey[findingKey]
-                        const aiError = errorByKey[findingKey]
-                        const isLoading = loadingKey === findingKey
+                        const aiResult = aiByKey[key]
+                        const aiError = errorByKey[key]
+                        const isLoading = loadingKey === key
+                        const isSelected = selectedByKey[key] ?? true
+                        const isRecurring = recurringSignatureSet.has(
+                            buildFindingRecurrenceSignature(finding),
+                        )
 
                         return (
                             <Alert
-                                severity="warning"
+                                severity={finding.severity}
                                 className={classes.finding}
                                 key={`${finding.ruleId}-${finding.filePath}-${index}`}
                             >
-                                <strong>{finding.comment}</strong>
-                                <br />
-                                File: {finding.filePath}
-                                <br />
-                                Line: {finding.lineNumber ?? 'N/A'}
+                                <Box className={classes.findingHeaderRow}>
+                                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                                        <Chip size="small" label={finding.severity.toUpperCase()} color={finding.severity === 'error' ? 'error' : finding.severity === 'warning' ? 'warning' : 'info'} />
+                                        {isRecurring && (
+                                            <Chip
+                                                size="small"
+                                                label="Keeps coming up"
+                                                color="warning"
+                                                variant="outlined"
+                                            />
+                                        )}
+                                    </Stack>
+                                    <Box className={classes.findingSelectWrap}>
+                                        <Typography variant="caption" color="text.secondary">Posting</Typography>
+                                        <Button
+                                            size="small"
+                                            className={classes.selectToggleButton}
+                                            variant={isSelected ? 'contained' : 'outlined'}
+                                            color={isSelected ? 'success' : 'inherit'}
+                                            startIcon={
+                                                isSelected ? (
+                                                    <CheckCircleOutlineRoundedIcon fontSize="small" />
+                                                ) : (
+                                                    <RemoveCircleOutlineRoundedIcon fontSize="small" />
+                                                )
+                                            }
+                                            onClick={() =>
+                                                setSelectedByKey((previous) => ({
+                                                    ...previous,
+                                                    [key]: !(previous[key] ?? true),
+                                                }))
+                                            }
+                                        >
+                                            {isSelected ? 'Included' : 'Excluded'}
+                                        </Button>
+                                    </Box>
+                                </Box>
+
+                                <Box className={classes.findingMetaRow}>
+                                    <Typography variant="body2"><strong>{finding.comment}</strong></Typography>
+                                </Box>
+                                <Typography variant="body2">File: {finding.filePath}</Typography>
+                                <Typography variant="body2">Line: {finding.lineNumber ?? 'N/A'}</Typography>
 
                                 <Typography variant="body2" className={classes.codeLabel}>
                                     Code changes
