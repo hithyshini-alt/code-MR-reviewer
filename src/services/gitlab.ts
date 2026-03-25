@@ -38,8 +38,10 @@ function extractEmbeddedDedupKey(noteBody: string): string | null {
 
 function extractLegacyDedupKey(noteBody: string): string | null {
     const titleMatch = noteBody.match(/\*\*Code Review Bot ·\s*([^*]+)\*\*/i)
-    const fileMatch = noteBody.match(/\*\*File:\*\*\s*(.+)/i)
-    const lineMatch = noteBody.match(/\*\*Line:\*\*\s*(.+)/i)
+    const fileMatch =
+        noteBody.match(/\*\*File:\*\*\s*(.+)/i) || noteBody.match(/(?:^|\n)File:\s*(.+)/i)
+    const lineMatch =
+        noteBody.match(/\*\*Line:\*\*\s*(.+)/i) || noteBody.match(/(?:^|\n)Line:\s*(.+)/i)
 
     const title = titleMatch?.[1]?.trim()
     const filePath = fileMatch?.[1]?.trim()
@@ -62,43 +64,22 @@ function buildFindingKeyMarker(finding: Finding): string {
     return `<!-- ${FINDING_KEY_PREFIX}${encoded} -->`
 }
 
-function buildSuggestion(finding: Finding): string {
-    if (finding.suggestion?.trim()) {
-        return finding.suggestion.trim()
-    }
-
-    if (finding.ruleId === 'warn-let-prefer-const') {
-        return 'Use `const` for variables that are never reassigned.'
-    }
-
-    if (finding.ruleId === 'warn-no-console-log') {
-        return 'Use structured logger utilities instead of `console.log`.'
-    }
-
-    if (finding.ruleId === 'noSx') {
-        return 'Move style definitions to styled components/CSS modules for consistency.'
-    }
-
-    return 'Refactor this line to follow project best practices.'
-}
-
 function buildFindingNoteBody(finding: Finding): string {
-    const severity = finding.severity || 'warning'
-    const category = finding.category || 'bestpractice'
-    const suggestion = buildSuggestion(finding)
+    const severity = (finding.severity || 'warning').toUpperCase()
 
     return [
-        `🔵 **Code Review Bot · ${finding.ruleTitle}**`,
+        `🔵 **MR Code Review Bot · ${finding.ruleTitle}**`,
         '',
-        `[${category.toUpperCase()}] ${finding.comment}`,
+        `${finding.comment}`,
         '',
-        `> Suggestion: ${suggestion}`,
+        `Severity: ${severity}`,
+        `File: ${finding.filePath}`,
+        `Line: ${finding.lineNumber ?? 'N/A'}`,
         '',
-        `**Severity:** ${severity} · **Category:** ${category}`,
-        '',
-        `**File:** ${finding.filePath}`,
-        `**Line:** ${finding.lineNumber ?? 'N/A'}`,
-        `**Code:** \`${finding.snippet.trim()}\``,
+        'Code:',
+        '```ts',
+        finding.snippet.trim() || '// Snippet unavailable',
+        '```',
         '',
         buildFindingKeyMarker(finding),
     ].join('\n')

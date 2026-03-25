@@ -9,7 +9,10 @@ import {
     DialogTitle,
     FormControlLabel,
     FormGroup,
+    IconButton,
     Paper,
+    Radio,
+    RadioGroup,
     Stack,
     Step,
     StepLabel,
@@ -28,6 +31,11 @@ import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded'
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded'
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded'
 import BlockRoundedIcon from '@mui/icons-material/BlockRounded'
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded'
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
+import FolderRoundedIcon from '@mui/icons-material/FolderRounded'
+import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded'
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
 import { makeStyles } from '../hooks/makeStyles'
 import {
     fetchMergeRequestChanges,
@@ -51,7 +59,7 @@ import {
 const useStyles = makeStyles((theme) => ({
     page: {
         minHeight: '100vh',
-        background: `radial-gradient(circle at top right, ${theme.palette.primary.light}1f 0%, transparent 38%), radial-gradient(circle at bottom left, #67e8f91f 0%, transparent 30%), ${theme.palette.background.default}`,
+        backgroundColor: '#edf7f5',
     },
     shell: {
         display: 'flex',
@@ -62,8 +70,8 @@ const useStyles = makeStyles((theme) => ({
     },
     content: {
         flex: 1,
-        padding: theme.spacing(4.5, 4, 6),
-        maxWidth: 1200,
+        padding: theme.spacing(4.5, 4, 6.5),
+        maxWidth: 1240,
         width: '100%',
         margin: '0 auto',
         [theme.breakpoints.down('md')]: {
@@ -74,14 +82,21 @@ const useStyles = makeStyles((theme) => ({
         display: 'flex',
         flexDirection: 'column',
         gap: theme.spacing(3),
+        animation: 'riseIn 420ms ease both',
     },
     statusAlert: {
-        borderRadius: theme.spacing(1.25),
+        borderRadius: theme.spacing(1.4),
+    },
+    hero: {
+        padding: theme.spacing(2.25),
+        borderRadius: theme.spacing(2),
+        border: `1px solid ${theme.palette.primary.light}66`,
+        backgroundColor: 'rgba(15, 118, 110, 0.08)',
     },
     heading: {
         fontWeight: 700,
         lineHeight: 1.2,
-        letterSpacing: -0.2,
+        letterSpacing: -0.35,
     },
     subHeading: {
         maxWidth: '70ch',
@@ -102,17 +117,31 @@ const useStyles = makeStyles((theme) => ({
     statCard: {
         padding: theme.spacing(2),
         borderRadius: theme.spacing(2),
-        backgroundColor: theme.palette.background.paper,
-        border: `1px solid ${theme.palette.divider}`,
-        boxShadow: '0 6px 14px rgba(44, 18, 99, 0.08)',
+        backgroundColor: '#f8fcfb',
+        border: `1px solid ${theme.palette.primary.light}55`,
+        boxShadow: '0 12px 26px rgba(15, 23, 42, 0.07)',
         minHeight: 138,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
+        animation: 'cardFloat 440ms ease both',
         '&:hover': {
-            transform: 'translateY(-2px)',
-            boxShadow: '0 12px 24px rgba(44, 18, 99, 0.12)',
+            transform: 'translateY(-3px)',
+            borderColor: theme.palette.primary.light,
+            boxShadow: '0 18px 32px rgba(15, 23, 42, 0.11)',
+        },
+        '&:nth-of-type(2)': {
+            animationDelay: '50ms',
+        },
+        '&:nth-of-type(3)': {
+            animationDelay: '90ms',
+        },
+        '&:nth-of-type(4)': {
+            animationDelay: '130ms',
+        },
+        '&:nth-of-type(5)': {
+            animationDelay: '170ms',
         },
     },
     statTopRow: {
@@ -162,6 +191,12 @@ const useStyles = makeStyles((theme) => ({
         letterSpacing: 0.8,
         color: theme.palette.text.secondary,
     },
+    statHelperText: {
+        marginTop: theme.spacing(0.5),
+        color: theme.palette.text.secondary,
+        fontSize: '0.1rem',
+        letterSpacing: 0.4,
+    },
     reviewPanel: {
         display: 'flex',
         flexDirection: 'column',
@@ -181,7 +216,7 @@ const useStyles = makeStyles((theme) => ({
             backgroundColor: '#fcfcff',
         },
         '& .MuiInputLabel-root': {
-            fontWeight: 500,
+            fontWeight: 600,
         },
     },
     reviewActionRow: {
@@ -193,7 +228,7 @@ const useStyles = makeStyles((theme) => ({
     reviewButton: {
         minWidth: 190,
         minHeight: 46,
-        background: 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+        backgroundColor: theme.palette.primary.main,
     },
     helperMeta: {
         color: theme.palette.text.secondary,
@@ -215,9 +250,31 @@ const useStyles = makeStyles((theme) => ({
         overflowY: 'auto',
         border: `1px solid ${theme.palette.divider}`,
         borderRadius: theme.spacing(1.25),
-        padding: theme.spacing(1),
+        padding: theme.spacing(0.75),
         marginTop: theme.spacing(1),
         backgroundColor: '#fcfcff',
+    },
+    treeRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: theme.spacing(0.5),
+        minHeight: 34,
+        borderRadius: theme.spacing(1),
+        paddingRight: theme.spacing(1),
+        '&:hover': {
+            backgroundColor: `${theme.palette.primary.light}1a`,
+        },
+    },
+    folderLabel: {
+        fontWeight: 600,
+        color: theme.palette.text.primary,
+    },
+    treeMeta: {
+        color: theme.palette.text.secondary,
+        fontSize: '0.76rem',
+    },
+    fileLabel: {
+        color: theme.palette.text.primary,
     },
     diffList: {
         display: 'flex',
@@ -299,11 +356,18 @@ type ReviewFlowState =
     | 'posted'
     | 'error'
 
-const REVIEW_TIMELINE_STEPS = [
+const REVIEW_TIMELINE_STEPS_WITH_POSTING = [
     'Ready',
     'Reviewing',
     'Reviewed',
     'Posting comments',
+    'Completed',
+]
+
+const REVIEW_TIMELINE_STEPS_NO_POSTING = [
+    'Ready',
+    'Reviewing',
+    'Reviewed',
     'Completed',
 ]
 
@@ -314,14 +378,111 @@ type FileSelectionItem = {
     selected: boolean
 }
 
+type FileTreeFolder = {
+    name: string
+    path: string
+    folders: FileTreeFolder[]
+    files: FileSelectionItem[]
+}
+
+type FileSelectionTree = {
+    folders: FileTreeFolder[]
+    files: FileSelectionItem[]
+}
+
 function getChangePath(change: GitLabChange): string {
     return change.new_path || change.old_path || ''
+}
+
+function normalizeSelectionPath(filePath: string): string {
+    return filePath.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function getFileNameFromPath(filePath: string): string {
+    const normalized = normalizeSelectionPath(filePath)
+    const parts = normalized.split('/').filter(Boolean)
+    return parts.at(-1) || normalized
+}
+
+function buildFileSelectionTree(items: FileSelectionItem[]): FileSelectionTree {
+    type MutableFolder = {
+        name: string
+        path: string
+        folders: Map<string, MutableFolder>
+        files: FileSelectionItem[]
+    }
+
+    const root: MutableFolder = {
+        name: '',
+        path: '',
+        folders: new Map<string, MutableFolder>(),
+        files: [],
+    }
+
+    const sortedItems = [...items].sort((a, b) => a.path.localeCompare(b.path))
+
+    for (const item of sortedItems) {
+        const normalized = normalizeSelectionPath(item.path)
+        const parts = normalized.split('/').filter(Boolean)
+
+        if (parts.length <= 1) {
+            root.files.push(item)
+            continue
+        }
+
+        let current = root
+        const folderParts = parts.slice(0, -1)
+
+        for (const folderName of folderParts) {
+            const folderPath = current.path ? `${current.path}/${folderName}` : folderName
+
+            if (!current.folders.has(folderName)) {
+                current.folders.set(folderName, {
+                    name: folderName,
+                    path: folderPath,
+                    folders: new Map<string, MutableFolder>(),
+                    files: [],
+                })
+            }
+
+            current = current.folders.get(folderName) as MutableFolder
+        }
+
+        current.files.push(item)
+    }
+
+    const toReadonlyFolder = (folder: MutableFolder): FileTreeFolder => ({
+        name: folder.name,
+        path: folder.path,
+        folders: [...folder.folders.values()]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(toReadonlyFolder),
+        files: [...folder.files].sort((a, b) => a.path.localeCompare(b.path)),
+    })
+
+    return {
+        folders: [...root.folders.values()]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(toReadonlyFolder),
+        files: [...root.files].sort((a, b) => a.path.localeCompare(b.path)),
+    }
+}
+
+function isTestFilePath(filePath: string): boolean {
+    const normalized = filePath.toLowerCase().replace(/\\/g, '/')
+
+    return (
+        /\.(test|spec)\.(ts|tsx)$/.test(normalized) ||
+        normalized.includes('/__tests__/') ||
+        normalized.includes('/tests/') ||
+        normalized.includes('/test/')
+    )
 }
 
 function isReviewableFileType(filePath: string, includeTestFiles: boolean): boolean {
     const normalized = filePath.toLowerCase()
 
-    if (!includeTestFiles && normalized.endsWith('.test.ts')) {
+    if (!includeTestFiles && isTestFilePath(normalized)) {
         return false
     }
 
@@ -334,6 +495,7 @@ function ReviewerPage() {
     const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard')
     const [mergeRequestUrl, setMergeRequestUrl] = useState('')
     const [accessToken, setAccessToken] = useState('')
+    const [aiApiKey, setAiApiKey] = useState('')
     const [rules, setRules] = useState<ReviewRule[]>(defaultRules)
     const [findings, setFindings] = useState<Finding[]>([])
     const [history, setHistory] = useState<ReviewHistoryItem[]>([])
@@ -349,10 +511,11 @@ function ReviewerPage() {
     const [lastReviewedFiles, setLastReviewedFiles] = useState(0)
     const [lastExcludedFiles, setLastExcludedFiles] = useState(0)
     const [includeTestFiles, setIncludeTestFiles] = useState(false)
-    const [, setReviewedChanges] = useState<GitLabChange[]>([])
+    const [reviewedChanges, setReviewedChanges] = useState<GitLabChange[]>([])
     const [isFileSelectionOpen, setIsFileSelectionOpen] = useState(false)
     const [fileSelectionItems, setFileSelectionItems] = useState<FileSelectionItem[]>([])
     const [fileSelectionTotalChanges, setFileSelectionTotalChanges] = useState(0)
+    const [expandedFolderPaths, setExpandedFolderPaths] = useState<string[]>([])
 
     const findingCountByRule: BuiltInFindingsSummary = useMemo(
         () => summarizeFindings(findings, rules),
@@ -370,7 +533,46 @@ function ReviewerPage() {
         () => fileSelectionItems.filter((item) => item.selected).length,
         [fileSelectionItems],
     )
+    const fileSelectionTree = useMemo(
+        () => buildFileSelectionTree(fileSelectionItems),
+        [fileSelectionItems],
+    )
+    const shouldShowPostingStep = useMemo(
+        () => findings.length > 0 || reviewFlowState === 'posting' || reviewFlowState === 'posted',
+        [findings.length, reviewFlowState],
+    )
+    const timelineSteps = useMemo(
+        () =>
+            shouldShowPostingStep
+                ? REVIEW_TIMELINE_STEPS_WITH_POSTING
+                : REVIEW_TIMELINE_STEPS_NO_POSTING,
+        [shouldShowPostingStep],
+    )
     const timelineStepIndex = useMemo(() => {
+        const isNoIssueReviewComplete =
+            reviewFlowState === 'reviewed' && hasReviewed && findings.length === 0
+
+        if (isNoIssueReviewComplete) {
+            return shouldShowPostingStep ? 4 : 3
+        }
+
+        if (!shouldShowPostingStep) {
+            switch (reviewFlowState) {
+                case 'idle':
+                    return 0
+                case 'reviewing':
+                    return 1
+                case 'reviewed':
+                    return 2
+                case 'posted':
+                    return 3
+                case 'error':
+                    return 0
+                default:
+                    return 0
+            }
+        }
+
         switch (reviewFlowState) {
             case 'idle':
                 return 0
@@ -387,8 +589,23 @@ function ReviewerPage() {
             default:
                 return 0
         }
-    }, [reviewFlowState])
+    }, [findings.length, hasReviewed, reviewFlowState, shouldShowPostingStep])
+
+    const isTimelineComplete = useMemo(() => {
+        return (
+            reviewFlowState === 'posted' ||
+            (reviewFlowState === 'reviewed' && hasReviewed && findings.length === 0)
+        )
+    }, [findings.length, hasReviewed, reviewFlowState])
+
     const timelineStatusText = useMemo(() => {
+        const isNoIssueReviewComplete =
+            reviewFlowState === 'reviewed' && hasReviewed && findings.length === 0
+
+        if (isNoIssueReviewComplete) {
+            return 'Status: Review completed. No issues found.'
+        }
+
         switch (reviewFlowState) {
             case 'idle':
                 return 'Status: Ready to run review.'
@@ -405,7 +622,7 @@ function ReviewerPage() {
             default:
                 return 'Status: Ready.'
         }
-    }, [reviewFlowState])
+    }, [findings.length, hasReviewed, reviewFlowState])
 
     useEffect(() => {
         try {
@@ -443,11 +660,13 @@ function ReviewerPage() {
             const parsed = JSON.parse(rawCredentials) as {
                 saveCredentials?: boolean
                 accessToken?: string
+                aiApiKey?: string
             }
 
             if (parsed.saveCredentials) {
                 setSaveCredentials(true)
                 setAccessToken(parsed.accessToken ?? '')
+                setAiApiKey(parsed.aiApiKey ?? '')
             }
         } catch {
             setSaveCredentials(false)
@@ -516,9 +735,10 @@ function ReviewerPage() {
             JSON.stringify({
                 saveCredentials: true,
                 accessToken: accessToken.trim(),
+                aiApiKey: aiApiKey.trim(),
             }),
         )
-    }, [accessToken, saveCredentials])
+    }, [accessToken, aiApiKey, saveCredentials])
 
     const addCustomRule = (rule: {
         title: string
@@ -556,8 +776,8 @@ function ReviewerPage() {
         setErrorMessage('')
     }
 
-    const completeReviewFromChanges = (changesToReview: GitLabChange[], totalChangesCount: number) => {
-        const excludedCount = Math.max(totalChangesCount - changesToReview.length, 0)
+    const completeReviewFromChanges = (changesToReview: GitLabChange[], totalReviewableCount: number) => {
+        const excludedCount = Math.max(totalReviewableCount - changesToReview.length, 0)
         const newFindings = analyzeDiff(changesToReview, rules)
         const summary = summarizeFindings(newFindings, rules)
 
@@ -606,9 +826,48 @@ function ReviewerPage() {
         setFileSelectionItems((previous) => previous.map((item) => ({ ...item, selected: checked })))
     }
 
+    const toggleFolderExpanded = (folderPath: string) => {
+        setExpandedFolderPaths((previous) =>
+            previous.includes(folderPath)
+                ? previous.filter((value) => value !== folderPath)
+                : [...previous, folderPath],
+        )
+    }
+
+    const getFolderSelectionStats = (folderPath: string) => {
+        const matching = fileSelectionItems.filter((item) => {
+            const normalized = normalizeSelectionPath(item.path)
+            return normalized === folderPath || normalized.startsWith(`${folderPath}/`)
+        })
+
+        const selectedCount = matching.filter((item) => item.selected).length
+
+        return {
+            totalCount: matching.length,
+            selectedCount,
+        }
+    }
+
+    const toggleFolderSelection = (folderPath: string, checked: boolean) => {
+        setFileSelectionItems((previous) =>
+            previous.map((item) => {
+                const normalized = normalizeSelectionPath(item.path)
+                if (normalized === folderPath || normalized.startsWith(`${folderPath}/`)) {
+                    return {
+                        ...item,
+                        selected: checked,
+                    }
+                }
+
+                return item
+            }),
+        )
+    }
+
     const cancelFileSelection = () => {
         setIsFileSelectionOpen(false)
         setFileSelectionItems([])
+        setExpandedFolderPaths([])
         setFileSelectionTotalChanges(0)
         setReviewFlowState('idle')
         setStatusMessage('Review canceled before analysis.')
@@ -621,6 +880,7 @@ function ReviewerPage() {
 
         setIsFileSelectionOpen(false)
         setFileSelectionItems([])
+        setExpandedFolderPaths([])
 
         completeReviewFromChanges(selectedChanges, fileSelectionTotalChanges)
         setFileSelectionTotalChanges(0)
@@ -664,7 +924,8 @@ function ReviewerPage() {
             })
 
             if (autoFilteredChanges.length === 0) {
-                completeReviewFromChanges([], data.changes.length)
+                completeReviewFromChanges([], 0)
+                setStatusMessage('No reviewable files found for the selected filter.')
                 return
             }
 
@@ -675,8 +936,22 @@ function ReviewerPage() {
                 selected: true,
             }))
 
+            const initialExpandedFolders = Array.from(
+                new Set(
+                    items.flatMap((item) => {
+                        const parts = normalizeSelectionPath(item.path).split('/').filter(Boolean)
+                        const folderParts = parts.slice(0, -1)
+
+                        return folderParts.map((_, index) =>
+                            folderParts.slice(0, index + 1).join('/'),
+                        )
+                    }),
+                ),
+            )
+
             setFileSelectionItems(items)
-            setFileSelectionTotalChanges(data.changes.length)
+            setExpandedFolderPaths(initialExpandedFolders)
+            setFileSelectionTotalChanges(autoFilteredChanges.length)
             setIsFileSelectionOpen(true)
             setStatusMessage(
                 `Loaded ${autoFilteredChanges.length} reviewable file(s). Deselect files you want to skip, then continue.`,
@@ -735,9 +1010,14 @@ function ReviewerPage() {
 
     const dashboardView = (
         <Stack className={classes.root}>
-            <Typography variant="body2" color="text.secondary">
-                Analyze GitLab Merge Requests and auto-post review comments.
-            </Typography>
+            <Box className={classes.hero}>
+                <Typography variant="h4" className={classes.heading}>
+                    Merge Request Reviewer
+                </Typography>
+                <Typography variant="body2" color="text.secondary" className={classes.subHeading}>
+                    Analyze GitLab Merge Requests, surface code risks quickly, and post actionable comments with one flow.
+                </Typography>
+            </Box>
 
             <Box className={classes.statsGrid}>
                 <Paper className={classes.statCard}>
@@ -775,6 +1055,7 @@ function ReviewerPage() {
                         <Typography className={classes.statValue}>{lastReviewedFiles}</Typography>
                     </Box>
                     <Typography className={classes.statLabel}>FILES REVIEWED</Typography>
+                    <Typography className={classes.statHelperText}>Current review only</Typography>
                 </Paper>
                 <Paper className={classes.statCard}>
                     <Box className={classes.statTopRow}>
@@ -784,6 +1065,7 @@ function ReviewerPage() {
                         <Typography className={classes.statValue}>{lastExcludedFiles}</Typography>
                     </Box>
                     <Typography className={classes.statLabel}>FILES EXCLUDED</Typography>
+                    <Typography className={classes.statHelperText}>Current review only</Typography>
                 </Paper>
             </Box>
 
@@ -819,18 +1101,32 @@ function ReviewerPage() {
                         />
                     </Box>
 
-                    <Typography variant="body2" className={classes.stepHint}>
-                        File type filter is automatic: only `.ts` and `.tsx` files are reviewed.
-                    </Typography>
-                    <FormControlLabel
-                        control={
-                            <Checkbox
-                                checked={includeTestFiles}
-                                onChange={(event) => setIncludeTestFiles(event.target.checked)}
-                            />
-                        }
-                        label="Include Test Files"
+                    <TextField
+                        className={classes.field}
+                        label="AI Fix API Key"
+                        type="password"
+                        value={aiApiKey}
+                        onChange={(event) => setAiApiKey(event.target.value)}
+                        fullWidth
+                        helperText="Used by Get AI Fix for Llama 3 suggestions"
                     />
+
+                    <RadioGroup
+                        row
+                        value={includeTestFiles ? 'include' : 'exclude'}
+                        onChange={(event) => setIncludeTestFiles(event.target.value === 'include')}
+                    >
+                        <FormControlLabel
+                            value="include"
+                            control={<Radio />}
+                            label="Include test case files"
+                        />
+                        <FormControlLabel
+                            value="exclude"
+                            control={<Radio />}
+                            label="Exclude test case files"
+                        />
+                    </RadioGroup>
 
                     <Box className={classes.reviewActionRow}>
                         <Button
@@ -842,7 +1138,7 @@ function ReviewerPage() {
                             {isReviewing ? 'Reviewing...' : 'Start Review'}
                         </Button>
                         <Typography variant="body2" className={classes.helperMeta}>
-                            {rules.filter((rule) => rule.enabled).length} active rules
+                            {rules.filter((rule) => rule.enabled).length} active of {rules.length} total rules
                         </Typography>
                         <Button variant="text" onClick={() => setActiveMenu('history')}>
                             View review history
@@ -854,8 +1150,14 @@ function ReviewerPage() {
             <SectionCard title="Review Timeline">
                 <Box className={classes.timelineContainer}>
                     <Stepper activeStep={timelineStepIndex} alternativeLabel className={classes.timelineStepper}>
-                        {REVIEW_TIMELINE_STEPS.map((label, index) => (
-                            <Step key={label} completed={timelineStepIndex > index}>
+                        {timelineSteps.map((label, index) => (
+                            <Step
+                                key={label}
+                                completed={
+                                    timelineStepIndex > index ||
+                                    (isTimelineComplete && index === timelineSteps.length - 1)
+                                }
+                            >
                                 <StepLabel>{label}</StepLabel>
                             </Step>
                         ))}
@@ -896,7 +1198,12 @@ function ReviewerPage() {
 
             {hasReviewed && findings.length > 0 && (
                 <SectionCard title="Detected Issues">
-                    <FindingsSummary findings={findings} summary={findingCountByRule} />
+                    <FindingsSummary
+                        findings={findings}
+                        summary={findingCountByRule}
+                        reviewedChanges={reviewedChanges}
+                        aiApiKey={aiApiKey}
+                    />
                     <Box className={classes.resultActions}>
                         <Button
                             variant="outlined"
@@ -961,6 +1268,67 @@ function ReviewerPage() {
                 ? historyView
                 : settingsView
 
+    const renderFileNode = (item: FileSelectionItem, depth: number) => (
+        <Box
+            key={item.id}
+            className={classes.treeRow}
+            sx={{ pl: `${depth * 22 + 10}px` }}
+        >
+            <Box sx={{ width: 22, display: 'inline-flex', justifyContent: 'center' }}>
+                <DescriptionOutlinedIcon fontSize="small" color="disabled" />
+            </Box>
+            <Checkbox
+                checked={item.selected}
+                onChange={() => toggleFileSelection(item.id)}
+                size="small"
+            />
+            <Typography variant="body2" className={classes.fileLabel}>
+                {getFileNameFromPath(item.path)}
+            </Typography>
+        </Box>
+    )
+
+    const renderFolderNode = (folder: FileTreeFolder, depth: number) => {
+        const isExpanded = expandedFolderPaths.includes(folder.path)
+        const stats = getFolderSelectionStats(folder.path)
+
+        return (
+            <Box key={folder.path}>
+                <Box
+                    className={classes.treeRow}
+                    sx={{ pl: `${depth * 22 + 2}px` }}
+                >
+                    <IconButton
+                        size="small"
+                        onClick={() => toggleFolderExpanded(folder.path)}
+                    >
+                        {isExpanded ? <ExpandMoreRoundedIcon fontSize="small" /> : <ChevronRightRoundedIcon fontSize="small" />}
+                    </IconButton>
+                    <Checkbox
+                        checked={stats.totalCount > 0 && stats.selectedCount === stats.totalCount}
+                        indeterminate={stats.selectedCount > 0 && stats.selectedCount < stats.totalCount}
+                        onChange={(event) => toggleFolderSelection(folder.path, event.target.checked)}
+                        size="small"
+                    />
+                    {isExpanded ? <FolderOpenRoundedIcon fontSize="small" color="primary" /> : <FolderRoundedIcon fontSize="small" color="primary" />}
+                    <Typography variant="body2" className={classes.folderLabel}>
+                        {folder.name}
+                    </Typography>
+                    <Typography className={classes.treeMeta}>
+                        {stats.selectedCount}/{stats.totalCount}
+                    </Typography>
+                </Box>
+
+                {isExpanded && (
+                    <Box>
+                        {folder.folders.map((childFolder) => renderFolderNode(childFolder, depth + 1))}
+                        {folder.files.map((item) => renderFileNode(item, depth + 1))}
+                    </Box>
+                )}
+            </Box>
+        )
+    }
+
     return (
         <Box className={classes.page}>
             <Box className={classes.shell}>
@@ -990,18 +1358,8 @@ function ReviewerPage() {
                         />
                         <Box className={classes.selectionList}>
                             <FormGroup>
-                                {fileSelectionItems.map((item) => (
-                                    <FormControlLabel
-                                        key={item.id}
-                                        control={
-                                            <Checkbox
-                                                checked={item.selected}
-                                                onChange={() => toggleFileSelection(item.id)}
-                                            />
-                                        }
-                                        label={item.path}
-                                    />
-                                ))}
+                                {fileSelectionTree.folders.map((folder) => renderFolderNode(folder, 0))}
+                                {fileSelectionTree.files.map((item) => renderFileNode(item, 0))}
                             </FormGroup>
                         </Box>
                     </Stack>

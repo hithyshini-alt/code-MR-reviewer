@@ -10,20 +10,33 @@ type SectionCardProps = {
 const useStyles = makeStyles((theme) => ({
     card: {
         borderRadius: theme.spacing(2.25),
-        border: `1px solid ${theme.palette.divider}`,
-        boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
-        backgroundColor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.primary.light}55`,
+        boxShadow: '0 18px 38px rgba(15, 23, 42, 0.08)',
+        backgroundColor: '#f8fcfb',
+        position: 'relative',
+        overflow: 'hidden',
+        animation: 'riseIn 360ms ease both',
+        '&::before': {
+            content: '""',
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            height: 3,
+            width: '100%',
+            backgroundColor: '#0f766e',
+        },
     },
     content: {
-        padding: theme.spacing(3),
+        padding: theme.spacing(3.25),
         '&:last-child': {
-            paddingBottom: theme.spacing(3),
+            paddingBottom: theme.spacing(3.25),
         },
     },
     title: {
         marginBottom: theme.spacing(2),
-        fontWeight: 600,
+        fontWeight: 700,
         color: theme.palette.text.primary,
+        letterSpacing: -0.15,
     },
 }))
 

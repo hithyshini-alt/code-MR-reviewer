@@ -84,7 +84,7 @@ const useStyles = makeStyles((theme) => ({
         padding: theme.spacing(1.5),
         borderRadius: theme.spacing(1.5),
         border: `1px solid ${theme.palette.divider}`,
-        backgroundColor: '#fcfcff',
+        backgroundColor: '#fbfffe',
     },
     ruleHeader: {
         display: 'flex',
