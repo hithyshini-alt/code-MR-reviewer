@@ -245,7 +245,7 @@ function SettingsView({
     return (
         <Stack className={classes.root}>
             <Typography variant="body2" color="text.secondary" className={classes.note}>
-                Configure how this frontend stores and displays your local review data.
+                Configure how this frontend stores and displays your review data.
             </Typography>
 
             <Stack className={classes.row}>
@@ -259,10 +259,10 @@ function SettingsView({
                             onChange={(event) => onSaveCredentialsChange(event.target.checked)}
                         />
                     }
-                    label="Save Personal Access Token in browser"
+                    label="Save credentials to your account"
                 />
                 <Typography variant="body2" color="text.secondary">
-                    When enabled, your PAT is stored locally so you do not need to enter it every time.
+                    When enabled, your PAT and AI API key are saved to your account on the backend.
                 </Typography>
             </Stack>
 

@@ -1,6 +1,7 @@
 import {
     Avatar,
     Box,
+    Button,
     Divider,
     Stack,
     Tab,
@@ -18,6 +19,11 @@ export type MenuKey = 'dashboard' | 'history' | 'settings'
 type TopMenuProps = {
     active: MenuKey
     onChange: (key: MenuKey) => void
+    currentUser: {
+        email: string
+        username: string
+    }
+    onLogout: () => void
 }
 
 const useStyles = makeStyles((theme) => ({
@@ -114,9 +120,27 @@ const useStyles = makeStyles((theme) => ({
             },
         },
     },
+    bottomSection: {
+        borderTop: `1px solid ${theme.palette.primary.light}55`,
+        paddingTop: theme.spacing(1.5),
+        display: 'flex',
+        flexDirection: 'column',
+        gap: theme.spacing(0.75),
+    },
+    userLabel: {
+        fontWeight: 700,
+        color: theme.palette.text.primary,
+    },
+    userMeta: {
+        color: theme.palette.text.secondary,
+        fontSize: '0.8rem',
+    },
+    logoutButton: {
+        justifyContent: 'flex-start',
+    },
 }))
 
-function TopMenu({ active, onChange }: TopMenuProps) {
+function TopMenu({ active, onChange, currentUser, onLogout }: TopMenuProps) {
     const classes = useStyles()
 
     return (
@@ -146,6 +170,14 @@ function TopMenu({ active, onChange }: TopMenuProps) {
                     <Tab value="settings" icon={<SettingsRoundedIcon fontSize="small" />} iconPosition="start" label="Settings" />
                 </Tabs>
             </Stack>
+
+            <Box className={classes.bottomSection}>
+                <Typography className={classes.userLabel}>{currentUser.username}</Typography>
+                <Typography className={classes.userMeta}>{currentUser.email}</Typography>
+                <Button variant="text" color="inherit" onClick={onLogout} className={classes.logoutButton}>
+                    Log out
+                </Button>
+            </Box>
         </Box>
     )
 }

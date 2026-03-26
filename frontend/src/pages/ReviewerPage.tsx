@@ -41,6 +41,11 @@ import {
     fetchMergeRequestChanges,
     postFindingsAsNotes,
 } from '../services/gitlab'
+import {
+    clearStoredCredentials,
+    fetchStoredCredentials,
+    saveStoredCredentials,
+} from '../services/credentials'
 import type {
     BuiltInFindingsSummary,
     Finding,
@@ -55,6 +60,13 @@ import {
     parseMergeRequestUrl,
     summarizeFindings,
 } from '../utils/reviewer'
+import type { AuthUser } from '../types/auth'
+
+type ReviewerPageProps = {
+    currentUser: AuthUser
+    authToken: string
+    onLogout: () => void
+}
 
 const useStyles = makeStyles((theme) => ({
     page: {
@@ -346,7 +358,6 @@ const useStyles = makeStyles((theme) => ({
 
 const HISTORY_STORAGE_KEY = 'mr-reviewer-history-v1'
 const RULES_STORAGE_KEY = 'mr-reviewer-rules-v1'
-const CREDENTIALS_STORAGE_KEY = 'mr-reviewer-credentials-v1'
 const FINDING_RECURRENCE_STORAGE_KEY = 'mr-reviewer-finding-recurrence-v1'
 
 type ReviewFlowState =
@@ -520,7 +531,7 @@ function safeParseRecurrenceCounts(raw: string | null): Record<string, number> {
     }
 }
 
-function ReviewerPage() {
+function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
     const classes = useStyles()
 
     const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard')
@@ -532,7 +543,8 @@ function ReviewerPage() {
     const [postableFindings, setPostableFindings] = useState<Finding[]>([])
     const [history, setHistory] = useState<ReviewHistoryItem[]>([])
     const [saveHistory, setSaveHistory] = useState(true)
-    const [saveCredentials, setSaveCredentials] = useState(false)
+    const [saveCredentials, setSaveCredentials] = useState(true)
+    const [hasLoadedCredentials, setHasLoadedCredentials] = useState(false)
     const [statusMessage, setStatusMessage] = useState('')
     const [errorMessage, setErrorMessage] = useState('')
     const [isReviewing, setIsReviewing] = useState(false)
@@ -685,27 +697,56 @@ function ReviewerPage() {
     }, [])
 
     useEffect(() => {
-        try {
-            const rawCredentials = localStorage.getItem(CREDENTIALS_STORAGE_KEY)
-            if (!rawCredentials) {
-                return
-            }
+        let isActive = true
 
-            const parsed = JSON.parse(rawCredentials) as {
-                saveCredentials?: boolean
-                accessToken?: string
-                aiApiKey?: string
-            }
+        // Reset load state on account switch so persistence waits for the correct account data.
+        setHasLoadedCredentials(false)
+        setAccessToken('')
+        setAiApiKey('')
+        setSaveCredentials(true)
 
-            if (parsed.saveCredentials) {
+        const loadCredentials = async () => {
+            try {
+                const result = await fetchStoredCredentials(authToken)
+                if (!isActive) {
+                    return
+                }
+
+                const credentials = result.credentials
+
+                if (!credentials) {
+                    setAccessToken('')
+                    setAiApiKey('')
+                    setSaveCredentials(true)
+                    return
+                }
+
+                // Keep account-level persistence enabled by default.
+                // Empty stored values should not disable future saves.
                 setSaveCredentials(true)
-                setAccessToken(parsed.accessToken ?? '')
-                setAiApiKey(parsed.aiApiKey ?? '')
+                setAccessToken(credentials.gitlabPat || '')
+                setAiApiKey(credentials.aiApiKey || '')
+            } catch {
+                if (!isActive) {
+                    return
+                }
+
+                setAccessToken('')
+                setAiApiKey('')
+                setSaveCredentials(true)
+            } finally {
+                if (isActive) {
+                    setHasLoadedCredentials(true)
+                }
             }
-        } catch {
-            setSaveCredentials(false)
         }
-    }, [])
+
+        void loadCredentials()
+
+        return () => {
+            isActive = false
+        }
+    }, [authToken])
 
     useEffect(() => {
         try {
@@ -775,20 +816,33 @@ function ReviewerPage() {
     }, [rules])
 
     useEffect(() => {
-        if (!saveCredentials) {
-            localStorage.removeItem(CREDENTIALS_STORAGE_KEY)
+        if (!hasLoadedCredentials) {
             return
         }
 
-        localStorage.setItem(
-            CREDENTIALS_STORAGE_KEY,
-            JSON.stringify({
-                saveCredentials: true,
-                accessToken: accessToken.trim(),
-                aiApiKey: aiApiKey.trim(),
-            }),
-        )
-    }, [accessToken, aiApiKey, saveCredentials])
+        const persistCredentials = async () => {
+            try {
+                if (!saveCredentials) {
+                    await clearStoredCredentials(authToken)
+                    return
+                }
+
+                // Avoid creating empty credential rows on first load before user enters keys.
+                if (!accessToken.trim() && !aiApiKey.trim()) {
+                    return
+                }
+
+                await saveStoredCredentials(authToken, {
+                    gitlabPat: accessToken.trim(),
+                    aiApiKey: aiApiKey.trim(),
+                })
+            } catch {
+                // Keep reviewing flow usable even if credentials persistence fails.
+            }
+        }
+
+        void persistCredentials()
+    }, [accessToken, aiApiKey, authToken, hasLoadedCredentials, saveCredentials])
 
     const addCustomRule = (rule: {
         title: string
@@ -1410,6 +1464,8 @@ function ReviewerPage() {
                 <TopMenu
                     active={activeMenu}
                     onChange={setActiveMenu}
+                    currentUser={currentUser}
+                    onLogout={onLogout}
                 />
                 <Box className={classes.content}>{activeView}</Box>
             </Box>

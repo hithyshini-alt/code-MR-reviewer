@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String      @id @default(uuid())
+  email       String      @unique
+  username    String      @unique
+  passwordHash String     @map("password_hash")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  lastLoginAt DateTime?   @map("last_login_at")
+
+  credentials UserCredential?
+  rules       Rule[]
+  reviewRuns  ReviewRun[]
+
+  @@map("users")
+}
+
+model UserCredential {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  gitlabPatEncrypted  String?  @map("gitlab_pat_encrypted")
+  aiApiKeyEncrypted   String?  @map("ai_api_key_encrypted")
+  gitlabBaseUrl       String   @default("https://gitlab.com") @map("gitlab_base_url")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_credentials")
+}
+
+model Rule {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  title      String
+  severity   String
+  type       String   @default("regex")
+  pattern    String?
+  comment    String
+  category   String?
+  suggestion String?
+  enabled    Boolean  @default(true)
+  isBuiltin  Boolean  @default(false) @map("is_builtin")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  findings Finding[]
+
+  @@map("rules")
+}
+
+model ReviewRun {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  mrUrl            String   @map("mr_url")
+  mrTitle          String?  @map("mr_title")
+  projectId        String?  @map("project_id")
+  mrIid            String?  @map("mr_iid")
+  filesReviewed    Int      @default(0) @map("files_reviewed")
+  filesExcluded    Int      @default(0) @map("files_excluded")
+  totalFindings    Int      @default(0) @map("total_findings")
+  includeTestFiles Boolean  @default(false) @map("include_test_files")
+  runAt            DateTime @default(now()) @map("run_at")
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  findings       Finding[]
+  postedComments PostedComment[]
+
+  @@map("review_runs")
+}
+
+model Finding {
+  id           String   @id @default(uuid())
+  runId        String   @map("run_id")
+  ruleId       String?  @map("rule_id")
+  filePath     String   @map("file_path")
+  lineNumber   Int      @map("line_number")
+  codeSnippet  String?  @map("code_snippet")
+  severity     String
+  aiSuggestion String?  @map("ai_suggestion")
+  commentPosted Boolean @default(false) @map("comment_posted")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  run            ReviewRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  rule           Rule?          @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  postedComments PostedComment[]
+
+  @@map("findings")
+}
+
+model PostedComment {
+  id            String   @id @default(uuid())
+  runId         String   @map("run_id")
+  findingId     String   @map("finding_id")
+  gitlabNoteId  String?  @map("gitlab_note_id")
+  dedupMarker   String   @map("dedup_marker")
+  postedAt      DateTime @default(now()) @map("posted_at")
+
+  run     ReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  finding Finding   @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@map("posted_comments")
+}
