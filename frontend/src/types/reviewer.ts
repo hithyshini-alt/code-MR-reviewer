@@ -35,6 +35,7 @@ export type MergeRequestTarget = {
     apiBaseUrl: string
     projectPath: string
     mergeRequestIid: number
+    provider: 'gitlab' | 'github'
 }
 
 export type GitLabChange = {

@@ -329,16 +329,31 @@ const deprecatedHtmlTagPattern =
 
 export function parseMergeRequestUrl(inputUrl: string): MergeRequestTarget {
     const parsedUrl = new URL(inputUrl.trim())
-    const match = parsedUrl.pathname.match(/^\/(.+)\/-\/merge_requests\/(\d+)\/?$/)
+    const pathname = parsedUrl.pathname.replace(/\/+$/, '')
 
-    if (!match) {
-        throw new Error('Invalid Merge Request URL format.')
+    const githubMatch = pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/.*)?$/)
+    if (githubMatch) {
+        const isGitHubEnterprise = parsedUrl.hostname.toLowerCase() !== 'github.com'
+        return {
+            apiBaseUrl: isGitHubEnterprise
+                ? `${parsedUrl.protocol}//${parsedUrl.host}/api/v3`
+                : 'https://api.github.com',
+            projectPath: `${githubMatch[1]}/${githubMatch[2]}`,
+            mergeRequestIid: Number(githubMatch[3]),
+            provider: 'github',
+        }
+    }
+
+    const gitlabMatch = pathname.match(/^\/(.+)\/-\/merge_requests\/(\d+)(?:\/.*)?$/)
+    if (!gitlabMatch) {
+        throw new Error('Invalid Merge Request URL format. Use a GitLab MR or GitHub PR URL.')
     }
 
     return {
         apiBaseUrl: `${parsedUrl.protocol}//${parsedUrl.host}/api/v4`,
-        projectPath: match[1],
-        mergeRequestIid: Number(match[2]),
+        projectPath: gitlabMatch[1],
+        mergeRequestIid: Number(gitlabMatch[2]),
+        provider: 'gitlab',
     }
 }
 

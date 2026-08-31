@@ -1189,12 +1189,12 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
         setReviewFlowState('idle')
 
         if (!mergeRequestUrl.trim()) {
-            setErrorMessage('Please enter a GitLab Merge Request URL.')
+            setErrorMessage('Please enter a GitLab MR or GitHub PR URL.')
             return
         }
 
         if (!accessToken.trim()) {
-            setErrorMessage('Please enter a GitLab Personal Access Token.')
+            setErrorMessage('Please enter a GitLab or GitHub Personal Access Token.')
             return
         }
 
@@ -1373,8 +1373,8 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
                     </Typography>
                     <TextField
                         className={classes.field}
-                        label="GitLab MR URL"
-                        placeholder="https://gitlab.company.com/group/project/-/merge_requests/42"
+                        label="Merge Request / PR URL"
+                        placeholder="https://gitlab.company.com/group/project/-/merge_requests/42 or https://github.com/owner/repo/pull/42"
                         value={mergeRequestUrl}
                         onChange={(event) => setMergeRequestUrl(event.target.value)}
                         fullWidth
@@ -1383,7 +1383,7 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
                     <Box className={classes.formGrid}>
                         <TextField
                             className={classes.field}
-                            label="GitLab Host (Auto-detected)"
+                            label="Host (Auto-detected)"
                             value={autoDetectedHost}
                             fullWidth
                             InputProps={{ readOnly: true }}
