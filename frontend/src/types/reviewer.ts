@@ -62,4 +62,6 @@ export type ReviewHistoryItem = {
     createdAt: string
     totalFindings: number
     summary: FindingsSummary
+    findings?: Finding[]
+    reviewedChanges?: GitLabChange[]
 }
