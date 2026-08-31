@@ -568,7 +568,6 @@ function FindingsSummary({
                                         )}
                                     </Stack>
                                     <Box className={classes.findingSelectWrap}>
-                                        <Typography variant="caption" color="text.secondary">Posting</Typography>
                                         <Button
                                             size="small"
                                             className={classes.selectToggleButton}

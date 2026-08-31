@@ -3,15 +3,18 @@ import {
     Box,
     Button,
     Divider,
+    IconButton,
     Stack,
     Tab,
     Tabs,
+    Tooltip,
     Typography,
 } from '@mui/material'
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded'
 import HistoryEduRoundedIcon from '@mui/icons-material/HistoryEduRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
 import { makeStyles } from '../hooks/makeStyles'
 
 export type MenuKey = 'dashboard' | 'history' | 'settings'
@@ -24,6 +27,7 @@ type TopMenuProps = {
         username: string
     }
     onLogout: () => void
+    onCollapse?: () => void
 }
 
 const useStyles = makeStyles((theme) => ({
@@ -31,7 +35,7 @@ const useStyles = makeStyles((theme) => ({
         position: 'sticky',
         top: 0,
         height: '100vh',
-        width: 260,
+        width: 272,
         padding: theme.spacing(2.25),
         backgroundColor: '#f0faf8',
         borderRight: `1px solid ${theme.palette.primary.light}66`,
@@ -58,6 +62,12 @@ const useStyles = makeStyles((theme) => ({
     left: {
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: theme.spacing(1.5),
+    },
+    brandWrap: {
+        display: 'flex',
+        alignItems: 'center',
         gap: theme.spacing(1.5),
     },
     logo: {
@@ -73,6 +83,17 @@ const useStyles = makeStyles((theme) => ({
         fontSize: '1.02rem',
         color: theme.palette.primary.main,
         textTransform: 'uppercase',
+    },
+    closeButton: {
+        border: `1px solid ${theme.palette.primary.light}88`,
+        backgroundColor: '#eaf8f4',
+        color: theme.palette.primary.main,
+        '&:hover': {
+            backgroundColor: '#d8f1ea',
+        },
+        [theme.breakpoints.down('md')]: {
+            display: 'none',
+        },
     },
     tabs: {
         minHeight: theme.spacing(6),
@@ -140,19 +161,33 @@ const useStyles = makeStyles((theme) => ({
     },
 }))
 
-function TopMenu({ active, onChange, currentUser, onLogout }: TopMenuProps) {
+function TopMenu({ active, onChange, currentUser, onLogout, onCollapse }: TopMenuProps) {
     const classes = useStyles()
 
     return (
         <Box className={classes.root}>
             <Stack className={classes.topSection}>
                 <Stack className={classes.left} direction="row">
-                    <Avatar className={classes.logo}>
-                        <AutoAwesomeRoundedIcon fontSize="small" />
-                    </Avatar>
-                    <Typography variant="h6" className={classes.brand}>
-                        MR · REVIEW
-                    </Typography>
+                    <Box className={classes.brandWrap}>
+                        <Avatar className={classes.logo}>
+                            <AutoAwesomeRoundedIcon fontSize="small" />
+                        </Avatar>
+                        <Typography variant="h6" className={classes.brand}>
+                            MR · REVIEW
+                        </Typography>
+                    </Box>
+                    {onCollapse && (
+                        <Tooltip title="Close sidebar">
+                            <IconButton
+                                size="small"
+                                className={classes.closeButton}
+                                onClick={onCollapse}
+                                aria-label="Close sidebar"
+                            >
+                                <CloseRoundedIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )}
                 </Stack>
 
                 <Divider />

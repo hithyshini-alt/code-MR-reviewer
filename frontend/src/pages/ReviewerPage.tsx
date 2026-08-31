@@ -18,6 +18,7 @@ import {
     StepLabel,
     Stepper,
     TextField,
+    Tooltip,
     Typography,
 } from '@mui/material'
 import { useEffect, useMemo, useState } from 'react'
@@ -36,6 +37,7 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
 import FolderRoundedIcon from '@mui/icons-material/FolderRounded'
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
+import MenuOpenRoundedIcon from '@mui/icons-material/MenuOpenRounded'
 import { makeStyles } from '../hooks/makeStyles'
 import {
     fetchMergeRequestChanges,
@@ -46,6 +48,13 @@ import {
     fetchStoredCredentials,
     saveStoredCredentials,
 } from '../services/credentials'
+import {
+    createUserRule,
+    deleteUserRule,
+    fetchUserRules,
+    seedDefaultRules,
+    updateUserRule,
+} from '../services/rules'
 import type {
     BuiltInFindingsSummary,
     Finding,
@@ -82,12 +91,12 @@ const useStyles = makeStyles((theme) => ({
     },
     content: {
         flex: 1,
-        padding: theme.spacing(4.5, 4, 6.5),
-        maxWidth: 1240,
+        padding: theme.spacing(4, 2.5, 6),
+        maxWidth: '100%',
         width: '100%',
-        margin: '0 auto',
+        margin: 0,
         [theme.breakpoints.down('md')]: {
-            padding: theme.spacing(3, 2, 4),
+            padding: theme.spacing(2.5, 1.25, 3.5),
         },
     },
     root: {
@@ -354,10 +363,101 @@ const useStyles = makeStyles((theme) => ({
             width: '100%',
         },
     },
+    contentInner: {
+        position: 'relative',
+    },
+    collapsedSidebarRail: {
+        width: 56,
+        minWidth: 56,
+        height: '100vh',
+        position: 'sticky',
+        top: 0,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        paddingTop: theme.spacing(2),
+        backgroundColor: '#f0faf8',
+        borderRight: `1px solid ${theme.palette.primary.light}66`,
+        boxShadow: 'inset -1px 0 0 rgba(15, 118, 110, 0.1)',
+        [theme.breakpoints.down('md')]: {
+            display: 'none',
+        },
+    },
+    collapsedSidebarButton: {
+        border: `1px solid ${theme.palette.primary.light}`,
+        color: theme.palette.primary.main,
+        backgroundColor: '#eaf8f4',
+        boxShadow: '0 6px 16px rgba(15, 23, 42, 0.08)',
+        '&:hover': {
+            backgroundColor: '#d8f1ea',
+        },
+    },
+    historyWorkspace: {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(320px, 420px) minmax(0, 1fr)',
+        gap: theme.spacing(2),
+        alignItems: 'start',
+        [theme.breakpoints.down('lg')]: {
+            gridTemplateColumns: '1fr',
+        },
+    },
+    historyListCard: {
+        position: 'sticky',
+        top: theme.spacing(1),
+        [theme.breakpoints.down('lg')]: {
+            position: 'relative',
+            top: 0,
+        },
+    },
+    historyListScroll: {
+        maxHeight: 'calc(100vh - 290px)',
+        overflowY: 'auto',
+        paddingRight: theme.spacing(0.25),
+        [theme.breakpoints.down('lg')]: {
+            maxHeight: 'none',
+            overflowY: 'visible',
+            paddingRight: 0,
+        },
+    },
+    historyResultCard: {
+        minHeight: 440,
+    },
+    historyResultMeta: {
+        marginBottom: theme.spacing(1.25),
+        color: theme.palette.text.secondary,
+        wordBreak: 'break-word',
+    },
+    historyPlaceholder: {
+        padding: theme.spacing(3),
+        borderRadius: theme.spacing(1.5),
+        border: `1px dashed ${theme.palette.divider}`,
+        backgroundColor: theme.palette.background.default,
+    },
+    legacySummaryGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: theme.spacing(1),
+        [theme.breakpoints.down('sm')]: {
+            gridTemplateColumns: '1fr',
+        },
+    },
+    legacySummaryCard: {
+        padding: theme.spacing(1.25),
+        borderRadius: theme.spacing(1),
+        border: `1px solid ${theme.palette.divider}`,
+        backgroundColor: theme.palette.background.paper,
+    },
+    legacySummaryLabel: {
+        color: theme.palette.text.secondary,
+        fontSize: '0.82rem',
+    },
+    legacySummaryValue: {
+        marginTop: theme.spacing(0.25),
+        fontWeight: 700,
+    },
 }))
 
 const HISTORY_STORAGE_KEY = 'mr-reviewer-history-v1'
-const RULES_STORAGE_KEY = 'mr-reviewer-rules-v1'
 const FINDING_RECURRENCE_STORAGE_KEY = 'mr-reviewer-finding-recurrence-v1'
 
 type ReviewFlowState =
@@ -531,10 +631,20 @@ function safeParseRecurrenceCounts(raw: string | null): Record<string, number> {
     }
 }
 
+function toBuiltInSummary(summary: ReviewHistoryItem['summary'] | undefined): BuiltInFindingsSummary {
+    return {
+        noSx: summary?.noSx ?? 0,
+        noDeprecatedTags: summary?.noDeprecatedTags ?? 0,
+        optionalChaining: summary?.optionalChaining ?? 0,
+        custom: summary?.custom ?? 0,
+    }
+}
+
 function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
     const classes = useStyles()
 
     const [activeMenu, setActiveMenu] = useState<MenuKey>('dashboard')
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
     const [mergeRequestUrl, setMergeRequestUrl] = useState('')
     const [accessToken, setAccessToken] = useState('')
     const [aiApiKey, setAiApiKey] = useState('')
@@ -542,6 +652,7 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
     const [findings, setFindings] = useState<Finding[]>([])
     const [postableFindings, setPostableFindings] = useState<Finding[]>([])
     const [history, setHistory] = useState<ReviewHistoryItem[]>([])
+    const [selectedHistoryItemId, setSelectedHistoryItemId] = useState<string | null>(null)
     const [saveHistory, setSaveHistory] = useState(true)
     const [saveCredentials, setSaveCredentials] = useState(true)
     const [hasLoadedCredentials, setHasLoadedCredentials] = useState(false)
@@ -575,6 +686,16 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
         }
     }, [mergeRequestUrl])
     const reviewsRunCount = history.length
+    const selectedHistoryItem = useMemo(
+        () => history.find((item) => item.id === selectedHistoryItemId) ?? null,
+        [history, selectedHistoryItemId],
+    )
+    const selectedHistoryFindings = selectedHistoryItem?.findings ?? []
+    const selectedHistoryReviewedChanges = selectedHistoryItem?.reviewedChanges ?? []
+    const selectedHistorySummary = useMemo(
+        () => toBuiltInSummary(selectedHistoryItem?.summary),
+        [selectedHistoryItem],
+    )
     const selectedFileCount = useMemo(
         () => fileSelectionItems.filter((item) => item.selected).length,
         [fileSelectionItems],
@@ -679,22 +800,34 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
 
             const parsed = JSON.parse(raw) as ReviewHistoryItem[]
             if (Array.isArray(parsed)) {
-                setHistory(
-                    parsed.map((item) => ({
+                const normalized = parsed
+                    .map((item) => ({
                         ...item,
-                        summary: {
-                            noSx: item.summary?.noSx ?? 0,
-                            noDeprecatedTags: item.summary?.noDeprecatedTags ?? 0,
-                            optionalChaining: item.summary?.optionalChaining ?? 0,
-                            custom: item.summary?.custom ?? 0,
-                        },
-                    })),
-                )
+                        summary: toBuiltInSummary(item.summary),
+                        findings: Array.isArray(item.findings) ? item.findings : [],
+                        reviewedChanges: Array.isArray(item.reviewedChanges) ? item.reviewedChanges : [],
+                    }))
+                    .sort(
+                        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+                    )
+
+                setHistory(normalized)
             }
         } catch {
             setHistory([])
         }
     }, [])
+
+    useEffect(() => {
+        if (history.length === 0) {
+            setSelectedHistoryItemId(null)
+            return
+        }
+
+        setSelectedHistoryItemId((previous) =>
+            previous && history.some((item) => item.id === previous) ? previous : history[0].id,
+        )
+    }, [history])
 
     useEffect(() => {
         let isActive = true
@@ -749,42 +882,43 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
     }, [authToken])
 
     useEffect(() => {
-        try {
-            const rawRules = localStorage.getItem(RULES_STORAGE_KEY)
-            if (!rawRules) {
-                return
+        let isActive = true
+
+        const loadRules = async () => {
+            try {
+                const storedRules = await fetchUserRules(authToken)
+                if (!isActive) {
+                    return
+                }
+
+                if (storedRules.length > 0) {
+                    setRules(storedRules)
+                    return
+                }
+
+                // First login for this account: seed defaults so edits stay user-specific.
+                const seededRules = await seedDefaultRules(authToken, defaultRules)
+                if (!isActive) {
+                    return
+                }
+
+                setRules(seededRules)
+            } catch {
+                if (!isActive) {
+                    return
+                }
+
+                setRules(defaultRules)
+                setErrorMessage('Failed to load account rules from backend.')
             }
-
-            const parsed = JSON.parse(rawRules) as Partial<ReviewRule>[]
-            if (!Array.isArray(parsed) || parsed.length === 0) {
-                return
-            }
-
-            setRules(
-                parsed.map((rule, index) => {
-                    const matcherType = rule.matcherType || 'builtin'
-                    const inferredKey =
-                        rule.key ||
-                        (rule.id === 'noSx' || rule.id === 'noDeprecatedTags' || rule.id === 'optionalChaining'
-                            ? rule.id
-                            : undefined)
-
-                    return {
-                        id: rule.id || `migrated-${index}`,
-                        key: inferredKey,
-                        matcherType,
-                        title: rule.title || `Rule ${index + 1}`,
-                        enabled: rule.enabled ?? true,
-                        comment: rule.comment || 'Rule violated.',
-                        severity: rule.severity || 'warning',
-                        pattern: rule.pattern,
-                    }
-                }),
-            )
-        } catch {
-            setRules(defaultRules)
         }
-    }, [])
+
+        void loadRules()
+
+        return () => {
+            isActive = false
+        }
+    }, [authToken])
 
     useEffect(() => {
         const parsedCounts = safeParseRecurrenceCounts(
@@ -810,10 +944,6 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
 
         localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history))
     }, [history, saveHistory])
-
-    useEffect(() => {
-        localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(rules))
-    }, [rules])
 
     useEffect(() => {
         if (!hasLoadedCredentials) {
@@ -850,7 +980,7 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
         comment: string
         severity: RuleSeverity
     }) => {
-        const newRule: ReviewRule = {
+        const newRuleInput: ReviewRule = {
             id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             matcherType: 'regex',
             title: rule.title,
@@ -860,9 +990,18 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
             pattern: rule.pattern,
         }
 
-        setRules((previous) => [...previous, newRule])
-        setStatusMessage('Custom rule added.')
-        setErrorMessage('')
+        const createRule = async () => {
+            try {
+                const created = await createUserRule(authToken, newRuleInput)
+                setRules((previous) => [...previous, created])
+                setStatusMessage('Custom rule added.')
+                setErrorMessage('')
+            } catch {
+                setErrorMessage('Failed to save custom rule for this account.')
+            }
+        }
+
+        void createRule()
     }
 
     const updateRule = (
@@ -872,12 +1011,43 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
         setRules((previous) =>
             previous.map((rule) => (rule.id === ruleId ? { ...rule, ...updates } : rule)),
         )
+
+        const persistRuleUpdate = async () => {
+            try {
+                const updated = await updateUserRule(authToken, ruleId, updates)
+                setRules((previous) =>
+                    previous.map((rule) => (rule.id === ruleId ? updated : rule)),
+                )
+            } catch {
+                setErrorMessage('Failed to update rule. Reloading account rules...')
+                try {
+                    const latest = await fetchUserRules(authToken)
+                    setRules(latest.length > 0 ? latest : defaultRules)
+                } catch {
+                    setRules(defaultRules)
+                }
+            }
+        }
+
+        void persistRuleUpdate()
     }
 
     const deleteRule = (ruleId: string) => {
+        const previousRules = rules
         setRules((previous) => previous.filter((item) => item.id !== ruleId))
-        setStatusMessage('Rule deleted.')
-        setErrorMessage('')
+
+        const persistRuleDelete = async () => {
+            try {
+                await deleteUserRule(authToken, ruleId)
+                setStatusMessage('Rule deleted.')
+                setErrorMessage('')
+            } catch {
+                setRules(previousRules)
+                setErrorMessage('Failed to delete rule for this account.')
+            }
+        }
+
+        void persistRuleDelete()
     }
 
     const completeReviewFromChanges = (changesToReview: GitLabChange[], totalReviewableCount: number) => {
@@ -914,9 +1084,12 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
                 createdAt: new Date().toISOString(),
                 totalFindings: newFindings.length,
                 summary,
+                findings: newFindings,
+                reviewedChanges: changesToReview,
             }
 
             setHistory((previous) => [historyItem, ...previous].slice(0, 20))
+            setSelectedHistoryItemId(historyItem.id)
         }
 
         if (newFindings.length === 0) {
@@ -1360,9 +1533,93 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
             <Typography variant="body2" color="text.secondary" className={classes.subHeading}>
                 Past review runs are saved locally in your browser.
             </Typography>
-            <SectionCard title="Recent Reviews">
-                <ReviewHistoryView items={history} />
-            </SectionCard>
+            <Box className={classes.historyWorkspace}>
+                <Box className={classes.historyListCard}>
+                    <SectionCard title="Recent Reviews">
+                        <Box className={classes.historyListScroll}>
+                            <ReviewHistoryView
+                                items={history}
+                                selectedItemId={selectedHistoryItemId}
+                                onSelectItem={setSelectedHistoryItemId}
+                            />
+                        </Box>
+                    </SectionCard>
+                </Box>
+
+                <Box className={classes.historyResultCard}>
+                    <SectionCard
+                        title={
+                            selectedHistoryItem
+                                ? `Review Result · ${new Date(selectedHistoryItem.createdAt).toLocaleString()}`
+                                : 'Review Result'
+                        }
+                    >
+                        {!selectedHistoryItem ? (
+                            <Box className={classes.historyPlaceholder}>
+                                <Typography color="text.secondary">
+                                    Select a history card to view its review result here.
+                                </Typography>
+                            </Box>
+                        ) : selectedHistoryFindings.length > 0 ? (
+                            <>
+                                <Typography variant="body2" className={classes.historyResultMeta}>
+                                    {selectedHistoryItem.mergeRequestUrl}
+                                </Typography>
+                                <FindingsSummary
+                                    key={selectedHistoryItem.id}
+                                    findings={selectedHistoryFindings}
+                                    summary={selectedHistorySummary}
+                                    reviewedChanges={selectedHistoryReviewedChanges}
+                                    aiApiKey={aiApiKey}
+                                    recurringSignatures={[]}
+                                    onPostableFindingsChange={() => { }}
+                                />
+                            </>
+                        ) : selectedHistoryItem.totalFindings > 0 ? (
+                            <Stack spacing={1.25}>
+                                <Typography variant="body2" className={classes.historyResultMeta}>
+                                    {selectedHistoryItem.mergeRequestUrl}
+                                </Typography>
+                                <Typography color="text.secondary">
+                                    This review was saved before detailed per-file findings were stored.
+                                    Summary counts are still available below.
+                                </Typography>
+                                <Box className={classes.legacySummaryGrid}>
+                                    <Box className={classes.legacySummaryCard}>
+                                        <Typography className={classes.legacySummaryLabel}>Total findings</Typography>
+                                        <Typography className={classes.legacySummaryValue}>{selectedHistoryItem.totalFindings}</Typography>
+                                    </Box>
+                                    <Box className={classes.legacySummaryCard}>
+                                        <Typography className={classes.legacySummaryLabel}>No sx</Typography>
+                                        <Typography className={classes.legacySummaryValue}>{selectedHistorySummary.noSx}</Typography>
+                                    </Box>
+                                    <Box className={classes.legacySummaryCard}>
+                                        <Typography className={classes.legacySummaryLabel}>Deprecated tags</Typography>
+                                        <Typography className={classes.legacySummaryValue}>{selectedHistorySummary.noDeprecatedTags}</Typography>
+                                    </Box>
+                                    <Box className={classes.legacySummaryCard}>
+                                        <Typography className={classes.legacySummaryLabel}>Optional chaining</Typography>
+                                        <Typography className={classes.legacySummaryValue}>{selectedHistorySummary.optionalChaining}</Typography>
+                                    </Box>
+                                    <Box className={classes.legacySummaryCard}>
+                                        <Typography className={classes.legacySummaryLabel}>Custom</Typography>
+                                        <Typography className={classes.legacySummaryValue}>{selectedHistorySummary.custom}</Typography>
+                                    </Box>
+                                </Box>
+                            </Stack>
+                        ) : (
+                            <Stack spacing={1.25}>
+                                <Typography variant="body2" className={classes.historyResultMeta}>
+                                    {selectedHistoryItem.mergeRequestUrl}
+                                </Typography>
+                                <Typography color="text.secondary">
+                                    No issues were found in this review.
+                                </Typography>
+                            </Stack>
+                        )}
+                    </SectionCard>
+                </Box>
+            </Box>
         </Stack>
     )
 
@@ -1461,13 +1718,33 @@ function ReviewerPage({ currentUser, authToken, onLogout }: ReviewerPageProps) {
     return (
         <Box className={classes.page}>
             <Box className={classes.shell}>
-                <TopMenu
-                    active={activeMenu}
-                    onChange={setActiveMenu}
-                    currentUser={currentUser}
-                    onLogout={onLogout}
-                />
-                <Box className={classes.content}>{activeView}</Box>
+                {!isSidebarCollapsed ? (
+                    <TopMenu
+                        active={activeMenu}
+                        onChange={setActiveMenu}
+                        currentUser={currentUser}
+                        onLogout={onLogout}
+                        onCollapse={() => setIsSidebarCollapsed(true)}
+                    />
+                ) : (
+                    <Box className={classes.collapsedSidebarRail}>
+                        <Tooltip title="Open sidebar" placement="right">
+                            <IconButton
+                                size="small"
+                                className={classes.collapsedSidebarButton}
+                                onClick={() => setIsSidebarCollapsed(false)}
+                                aria-label="Open sidebar"
+                            >
+                                <MenuOpenRoundedIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                )}
+                <Box className={classes.content}>
+                    <Box className={classes.contentInner}>
+                        {activeView}
+                    </Box>
+                </Box>
             </Box>
 
             <Dialog open={isFileSelectionOpen} onClose={cancelFileSelection} fullWidth maxWidth="md">
