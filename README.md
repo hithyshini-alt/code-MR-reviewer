@@ -1,6 +1,6 @@
 # AI-Powered Code Review System
 
-An AI-powered code review system that reviews GitHub Pull Requests and provides feedback on code changes.
+An AI-powered code review system that reviews GitHub/GitLab PR's & MR's and provides feedback on code changes.
 
 
 ## Features
@@ -15,12 +15,12 @@ An AI-powered code review system that reviews GitHub Pull Requests and provides 
 
 ## How It Works
 
-1. Enter a GitHub Pull Request URL.
+1. Enter a GitHub/GitLab Pull Request or Merge Request URL.
 2. Click **Review** to analyze the code changes.
 3. The system fetches the Pull Request changes.
 4. AI analyzes the code and generates review feedback.
 5. Review results are displayed in the application.
-6. Generated comments can be posted back to the GitHub Pull Request.
+6. Generated comments can be posted back to the GitHub/GitLab Pull Request or Merge Request.
 
 
 ## AI Integration
